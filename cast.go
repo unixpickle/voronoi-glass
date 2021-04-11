@@ -35,7 +35,7 @@ func CastImage(collider model3d.Collider, img image.Image, index, distance float
 
 func Refract(rayDir, normal model3d.Coord3D, index float64) model3d.Coord3D {
 	theta := math.Acos(math.Abs(rayDir.Dot(normal)))
-	theta1 := math.Asin(math.Sin(theta) * Refraction)
+	theta1 := math.Asin(math.Sin(theta) * index)
 	otherVec := rayDir.ProjectOut(normal)
 	return normal.Scale(math.Cos(theta1)).Add(otherVec.Scale(math.Sin(theta1)))
 }

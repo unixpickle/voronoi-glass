@@ -1,8 +1,6 @@
 package main
 
 import (
-	"math"
-
 	"github.com/unixpickle/essentials"
 	"github.com/unixpickle/model3d/model2d"
 )
@@ -12,37 +10,44 @@ type VoronoiCell struct {
 	Edges  []*model2d.Segment
 }
 
+type VoronoiDiagram []*VoronoiCell
+
 // VoronoiCells computes the voronoi cells for a list of
 // coordinates, assuming they are all contained within a
 // bounding box.
 //
 // The resulting Voronoi cells may be slightly misaligned,
 // i.e. adjacent edges' coordinates may differ due to
-// rounding errors. See RepairVoronoiCells().
-func VoronoiCells(min, max model2d.Coord, coords []model2d.Coord) []*VoronoiCell {
+// rounding errors. See VoronoiDiagram.Repair().
+func VoronoiCells(min, max model2d.Coord, coords []model2d.Coord) VoronoiDiagram {
 	cells := make([]*VoronoiCell, len(coords))
 	for i, c := range coords {
-		collection := newFilteredCoords(min, max, coords)
-		for len(collection.Points) > 1 {
-			neighbor := collection.NearestNeighbor(c)
-			normal := neighbor.Sub(c).Normalize()
-			constraint := &model2d.LinearConstraint{
-				Normal: normal,
-				Max:    normal.Dot(neighbor.Mid(c)),
+		constraints := model2d.NewConvexPolytopeRect(min, max)
+		for _, c1 := range coords {
+			if c != c1 {
+				mp := c.Mid(c1)
+				normal := c1.Sub(c).Normalize()
+				constraint := &model2d.LinearConstraint{
+					Normal: normal,
+					Max:    normal.Dot(mp),
+				}
+				constraints = append(constraints, constraint)
 			}
-			collection.Constrain(constraint)
 		}
-		cells[i] = collection.Cell(c)
+		cells[i] = &VoronoiCell{
+			Center: c,
+			Edges:  constraints.Mesh().SegmentSlice(),
+		}
 	}
 	return cells
 }
 
-// RepairVoronoiCells merges nearly identical coordinates
-// in a Voronoi diagram to make a well-connected diagram.
-func RepairVoronoiCells(cells []*VoronoiCell, epsilon float64) {
+// Repair merges nearly identical coordinates to make a
+// well-connected graph.
+func (v VoronoiDiagram) Repair(epsilon float64) {
 	coordSet := map[model2d.Coord]bool{}
 	coordSlice := []model2d.Coord{}
-	for _, cell := range cells {
+	for _, cell := range v {
 		for _, s := range cell.Edges {
 			for _, p := range s {
 				if !coordSet[p] {
@@ -68,7 +73,7 @@ func RepairVoronoiCells(cells []*VoronoiCell, epsilon float64) {
 		}
 	}
 
-	for _, cell := range cells {
+	for _, cell := range v {
 		for i := 0; i < len(cell.Edges); i++ {
 			edge := cell.Edges[i]
 			for j, c := range edge {
@@ -82,6 +87,22 @@ func RepairVoronoiCells(cells []*VoronoiCell, epsilon float64) {
 	}
 }
 
+func (v VoronoiDiagram) Coords() []model2d.Coord {
+	coordSet := map[model2d.Coord]bool{}
+	coordSlice := []model2d.Coord{}
+	for _, cell := range v {
+		for _, s := range cell.Edges {
+			for _, p := range s {
+				if !coordSet[p] {
+					coordSet[p] = true
+					coordSlice = append(coordSlice, p)
+				}
+			}
+		}
+	}
+	return coordSlice
+}
+
 func neighborsInDistance(tree *model2d.CoordTree, c model2d.Coord, epsilon float64) []model2d.Coord {
 	for k := 2; true; k++ {
 		neighbors := tree.KNN(k, c)
@@ -93,55 +114,4 @@ func neighborsInDistance(tree *model2d.CoordTree, c model2d.Coord, epsilon float
 		}
 	}
 	panic("unreachable")
-}
-
-type filteredCoords struct {
-	Constraints model2d.ConvexPolytope
-	Points      []model2d.Coord
-}
-
-func newFilteredCoords(min, max model2d.Coord, coords []model2d.Coord) *filteredCoords {
-	res := &filteredCoords{
-		Constraints: model2d.NewConvexPolytopeRect(min, max),
-		Points:      make([]model2d.Coord, 0, len(coords)),
-	}
-	for _, c := range coords {
-		if res.Constraints.Contains(c) {
-			res.Points = append(res.Points, c)
-		}
-	}
-	return res
-}
-
-func (f *filteredCoords) Constrain(l *model2d.LinearConstraint) {
-	f.Constraints = append(f.Constraints, l)
-	for i := 0; i < len(f.Points); i++ {
-		if !l.Contains(f.Points[i]) {
-			f.Points[i] = f.Points[len(f.Points)-1]
-			f.Points = f.Points[:len(f.Points)-1]
-		}
-	}
-}
-
-func (f *filteredCoords) NearestNeighbor(c model2d.Coord) model2d.Coord {
-	minDist := math.Inf(1)
-	minPoint := c
-	for _, p := range f.Points {
-		if c == p {
-			continue
-		}
-		dist := c.SquaredDist(p)
-		if dist < minDist {
-			minDist = dist
-			minPoint = p
-		}
-	}
-	return minPoint
-}
-
-func (f *filteredCoords) Cell(center model2d.Coord) *VoronoiCell {
-	return &VoronoiCell{
-		Center: center,
-		Edges:  f.Constraints.Mesh().SegmentSlice(),
-	}
 }

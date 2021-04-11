@@ -23,6 +23,7 @@ func main() {
 	var imageDist float64
 	var inPath string
 	var outPath string
+	var useNN bool
 
 	flag.IntVar(&numPoints, "points", 500, "points in Voronoi diagram")
 	flag.Float64Var(&noiseLevel, "noise", 0.5, "scale of Z-axis noise")
@@ -30,6 +31,7 @@ func main() {
 	flag.Float64Var(&imageDist, "image-dist", 100.0, "effective distance of photo from screen")
 	flag.StringVar(&inPath, "in-path", "example/landscape.jpg", "input image")
 	flag.StringVar(&outPath, "out-path", "output.png", "output image")
+	flag.BoolVar(&useNN, "use-nn", false, "use nearest neighbors instead of a mesh")
 	flag.Parse()
 
 	img := ReadImage(inPath)
@@ -41,21 +43,35 @@ func main() {
 	for i := range points {
 		points[i] = model2d.NewCoordRandBounds(min, max)
 	}
-	log.Println("Creating Voronoi cells...")
-	voronoi := VoronoiCells(min, max, points)
-	log.Println("Repairing Voronoi cells...")
-	voronoi.Repair(1e-8)
 
-	log.Println("Creating Voronoi collider...")
-	mesh := voronoi.Mesh()
-	mesh = mesh.MapCoords(func(c model3d.Coord3D) model3d.Coord3D {
-		sensitivity := NormalSensitivity(mesh, c)
-		return c.Add(model3d.Z(2 * (rand.Float64() - 0.5) / sensitivity * noiseLevel))
-	})
-	collider := model3d.MeshToCollider(mesh)
+	var res image.Image
+	if useNN {
+		log.Println("Generating normals...")
+		normals := make([]model3d.Coord3D, len(points))
+		for i := range normals {
+			noise := model3d.XY(rand.NormFloat64(), rand.NormFloat64())
+			normals[i] = model3d.Z(1).Add(noise.Scale(noiseLevel)).Normalize()
+		}
+		log.Println("Casting image...")
+		res = CastImageNN(points, normals, img, refraction, imageDist)
+	} else {
+		log.Println("Creating Voronoi cells...")
+		voronoi := VoronoiCells(min, max, points)
+		log.Println("Repairing Voronoi cells...")
+		voronoi.Repair(1e-8)
 
-	log.Println("Casting image...")
-	res := CastImage(collider, img, refraction, imageDist)
+		log.Println("Creating Voronoi collider...")
+		mesh := voronoi.Mesh()
+		mesh = mesh.MapCoords(func(c model3d.Coord3D) model3d.Coord3D {
+			sensitivity := NormalSensitivity(mesh, c)
+			return c.Add(model3d.Z(2 * (rand.Float64() - 0.5) / sensitivity * noiseLevel))
+		})
+		collider := model3d.MeshToCollider(mesh)
+
+		log.Println("Casting image...")
+		res = CastImage(collider, img, refraction, imageDist)
+	}
+
 	f, err := os.Create(outPath)
 	essentials.Must(err)
 	defer f.Close()

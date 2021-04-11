@@ -5,6 +5,7 @@ import (
 	"image/color"
 	"math"
 
+	"github.com/unixpickle/model3d/model2d"
 	"github.com/unixpickle/model3d/model3d"
 )
 
@@ -21,6 +22,32 @@ func CastImage(collider model3d.Collider, img image.Image, index, distance float
 				continue
 			}
 			v1 := Refract(model3d.Z(1), rc.Normal, index)
+			if math.IsNaN(v1.Norm()) {
+				panic("internal reflection")
+			}
+			finalCoord := v1.Scale(distance / v1.Z).XY()
+			finalX, finalY := int(finalCoord.X+float64(x)), int(finalCoord.Y+float64(y))
+			res.Set(x, y, ReflectAt(img, finalX, finalY))
+		}
+	}
+
+	return res
+}
+
+func CastImageNN(points []model2d.Coord, normals []model3d.Coord3D, img image.Image,
+	index, distance float64) *image.RGBA {
+	tree := model2d.NewCoordTree(points)
+	coord2Normal := map[model2d.Coord]model3d.Coord3D{}
+	for i, c := range points {
+		coord2Normal[c] = normals[i]
+	}
+
+	bounds := img.Bounds()
+	res := image.NewRGBA(bounds)
+	for y := bounds.Min.Y; y < bounds.Max.Y; y++ {
+		for x := bounds.Min.X; x < bounds.Max.X; x++ {
+			normal := coord2Normal[tree.NearestNeighbor(model2d.XY(float64(x), float64(y)))]
+			v1 := Refract(model3d.Z(1), normal, index)
 			if math.IsNaN(v1.Norm()) {
 				panic("internal reflection")
 			}

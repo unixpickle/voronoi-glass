@@ -28,7 +28,7 @@ func main() {
 	flag.Float64Var(&noiseLevel, "noise", 0.5, "scale of Z-axis noise")
 	flag.Float64Var(&refraction, "refraction", 0.7, "index of refraction")
 	flag.Float64Var(&imageDist, "image-dist", 100.0, "effective distance of photo from screen")
-	flag.StringVar(&inPath, "in-path", "example/landscape.png", "input image")
+	flag.StringVar(&inPath, "in-path", "example/landscape.jpg", "input image")
 	flag.StringVar(&outPath, "out-path", "output.png", "output image")
 	flag.Parse()
 

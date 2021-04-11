@@ -1,8 +1,11 @@
 package main
 
 import (
+	"image/color"
+
 	"github.com/unixpickle/essentials"
 	"github.com/unixpickle/model3d/model2d"
+	"github.com/unixpickle/model3d/model3d"
 )
 
 type VoronoiCell struct {
@@ -101,6 +104,41 @@ func (v VoronoiDiagram) Coords() []model2d.Coord {
 		}
 	}
 	return coordSlice
+}
+
+func (v VoronoiDiagram) Render(path string) error {
+	mesh2d := model2d.NewMesh()
+	for _, cell := range v {
+		mesh2d.AddMesh(model2d.NewMeshSegments(cell.Edges))
+	}
+	pointsSolid := model2d.JoinedSolid{}
+	for _, cell := range v {
+		pointsSolid = append(pointsSolid, &model2d.Circle{Center: cell.Center, Radius: 10.0})
+	}
+
+	return model2d.RasterizeColor("voronoi.png", []interface{}{
+		mesh2d,
+		pointsSolid.Optimize(),
+	}, []color.Color{
+		color.RGBA{R: 0xff, A: 0xff},
+		color.RGBA{A: 0xff},
+	}, 1.0)
+}
+
+func (v VoronoiDiagram) Mesh() *model3d.Mesh {
+	mesh := model3d.NewMesh()
+	for _, cell := range v {
+		mesh2d := model2d.NewMeshSegments(cell.Edges)
+		triangles := model2d.TriangulateMesh(mesh2d)
+		for _, t := range triangles {
+			t3d := &model3d.Triangle{}
+			for i, c := range t {
+				t3d[i] = model3d.XYZ(c.X, c.Y, 0)
+			}
+			mesh.Add(t3d)
+		}
+	}
+	return mesh
 }
 
 func neighborsInDistance(tree *model2d.CoordTree, c model2d.Coord, epsilon float64) []model2d.Coord {

@@ -2,6 +2,7 @@ package main
 
 import (
 	"image/color"
+	"math"
 
 	"github.com/unixpickle/essentials"
 	"github.com/unixpickle/model3d/model2d"
@@ -111,17 +112,26 @@ func (v VoronoiDiagram) Render(path string) error {
 	for _, cell := range v {
 		mesh2d.AddMesh(model2d.NewMeshSegments(cell.Edges))
 	}
+	size := mesh2d.Max().Sub(mesh2d.Min())
+	maxSize := math.Max(size.X, size.Y)
+
 	pointsSolid := model2d.JoinedSolid{}
 	for _, cell := range v {
-		pointsSolid = append(pointsSolid, &model2d.Circle{Center: cell.Center, Radius: 10.0})
+		pointsSolid = append(pointsSolid, &model2d.Circle{
+			Center: cell.Center,
+			Radius: math.Max(2, maxSize/200),
+		})
 	}
 
+	bg := model2d.NewRect(mesh2d.Min(), mesh2d.Max())
 	return model2d.RasterizeColor("voronoi.png", []interface{}{
+		bg,
+		model2d.IntersectedSolid{pointsSolid.Optimize(), bg},
 		mesh2d,
-		pointsSolid.Optimize(),
 	}, []color.Color{
+		color.Gray{Y: 0xff},
+		color.RGBA{B: 0xff, A: 0xff},
 		color.RGBA{R: 0xff, A: 0xff},
-		color.RGBA{A: 0xff},
 	}, 1.0)
 }
 

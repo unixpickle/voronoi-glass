@@ -24,6 +24,7 @@ func main() {
 	var inPath string
 	var outPath string
 	var useNN bool
+	var voronoiImagePath string
 
 	flag.IntVar(&numPoints, "points", 500, "points in Voronoi diagram")
 	flag.Float64Var(&noiseLevel, "noise", 0.5, "scale of Z-axis noise")
@@ -32,6 +33,7 @@ func main() {
 	flag.StringVar(&inPath, "in-path", "example/landscape.jpg", "input image")
 	flag.StringVar(&outPath, "out-path", "output.png", "output image")
 	flag.BoolVar(&useNN, "use-nn", false, "use nearest neighbors instead of a mesh")
+	flag.StringVar(&voronoiImagePath, "voronoi-path", "", "optionally save a voronoi diagram")
 	flag.Parse()
 
 	img := ReadImage(inPath)
@@ -59,6 +61,11 @@ func main() {
 		voronoi := VoronoiCells(min, max, points)
 		log.Println("Repairing Voronoi cells...")
 		voronoi.Repair(1e-8)
+
+		if voronoiImagePath != "" {
+			log.Println("Rendering Voronoi diagram...")
+			voronoi.Render(voronoiImagePath)
+		}
 
 		log.Println("Creating Voronoi collider...")
 		mesh := voronoi.Mesh()
